@@ -23,3 +23,5 @@ Thumbs.db
 # Milestone ZIP handoffs (kept locally, not versioned)
 project-handoff/*.zip
 '@ | Set-Content -Path "$root\.gitignore" -Encoding utf8
+# Local vector database
+data/chroma/
