@@ -25,3 +25,7 @@ project-handoff/*.zip
 '@ | Set-Content -Path "$root\.gitignore" -Encoding utf8
 # Local vector database
 data/chroma/
+
+# Local SQLite database
+data/sample_data/*.db
+data/sample_data/*.db-*
