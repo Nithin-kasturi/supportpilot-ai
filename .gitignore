@@ -1,0 +1,25 @@
+@'
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Milestone ZIP handoffs (kept locally, not versioned)
+project-handoff/*.zip
+'@ | Set-Content -Path "$root\.gitignore" -Encoding utf8
