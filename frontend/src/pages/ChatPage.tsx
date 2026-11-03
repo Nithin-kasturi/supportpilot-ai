@@ -33,8 +33,11 @@ export function ChatPage() {
     setIsLoading(true)
 
     try {
-      const reply = await sendChatMessage(text)
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: reply }])
+      const { reply, sources } = await sendChatMessage(text)
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: reply, sources },
+      ])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {

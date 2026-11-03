@@ -1,7 +1,10 @@
 import httpx
 
 from app.core.config import settings
-from app.core.prompts import SYSTEM_PROMPT
+from app.core.prompts import NO_POLICY_FOUND, SYSTEM_PROMPT
+from app.services.retrieval_service import RetrievedChunk
+
+_CONTEXT_TAGS = ("<policy_context>", "</policy_context>")
 
 
 class LLMServiceError(Exception):
@@ -11,13 +14,37 @@ class LLMServiceError(Exception):
         self.status_code = status_code
 
 
-async def generate_reply(user_message: str) -> str:
+def _neutralize(text: str) -> str:
+    for tag in _CONTEXT_TAGS:
+        text = text.replace(tag, "")
+    return text
+
+
+def build_user_prompt(question: str, chunks: list[RetrievedChunk] | None) -> str:
+    """chunks=None: no retrieval was attempted. chunks=[]: retrieval found nothing relevant."""
+    question = _neutralize(question)
+    if chunks is None:
+        return question
+
+    if chunks:
+        context = "\n\n".join(
+            f"[{i}] {chunk.source} - {chunk.section}\n{_neutralize(chunk.text)}"
+            for i, chunk in enumerate(chunks, start=1)
+        )
+    else:
+        context = NO_POLICY_FOUND
+
+    return f"<policy_context>\n{context}\n</policy_context>\n\nCustomer question: {question}"
+
+
+async def generate_reply(user_message: str, chunks: list[RetrievedChunk] | None = None) -> str:
     payload = {
         "model": settings.ollama_model,
         "stream": False,
+        "options": {"temperature": settings.ollama_temperature},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
+            {"role": "user", "content": build_user_prompt(user_message, chunks)},
         ],
     }
 

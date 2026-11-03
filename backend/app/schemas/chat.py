@@ -9,5 +9,14 @@ class ChatRequest(BaseModel):
     message: UserMessage
 
 
+class Source(BaseModel):
+    document: str
+    category: str
+    section: str
+    chunk_id: str
+    similarity: float
+
+
 class ChatResponse(BaseModel):
     reply: str
+    sources: list[Source] = []

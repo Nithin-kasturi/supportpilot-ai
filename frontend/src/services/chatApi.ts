@@ -1,7 +1,21 @@
+import type { ChatReply, Source } from '../types/chat'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const REQUEST_TIMEOUT_MS = 130_000
 
-export async function sendChatMessage(message: string): Promise<string> {
+function isSource(value: unknown): value is Source {
+  if (typeof value !== 'object' || value === null) return false
+  const s = value as Record<string, unknown>
+  return (
+    typeof s.document === 'string' &&
+    typeof s.category === 'string' &&
+    typeof s.section === 'string' &&
+    typeof s.chunk_id === 'string' &&
+    typeof s.similarity === 'number'
+  )
+}
+
+export async function sendChatMessage(message: string): Promise<ChatReply> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -42,11 +56,15 @@ export async function sendChatMessage(message: string): Promise<string> {
       throw new Error('Received an unexpected response from the server.')
     }
 
-    const reply = (data as { reply?: unknown } | null)?.reply
+    const body = data as { reply?: unknown; sources?: unknown } | null
+    const reply = body?.reply
     if (typeof reply !== 'string' || !reply.trim()) {
       throw new Error('Received an unexpected response from the server.')
     }
-    return reply
+
+    const rawSources = body?.sources
+    const sources = Array.isArray(rawSources) ? rawSources.filter(isSource) : []
+    return { reply, sources }
   } finally {
     clearTimeout(timer)
   }
