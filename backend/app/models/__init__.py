@@ -12,6 +12,7 @@ from app.models.entities import (
     TicketCategory,
     TicketStatus,
 )
+from app.models.pending_action import PendingAction, PendingActionStatus, PendingActionType
 
 __all__ = [
     "Customer",
@@ -19,6 +20,9 @@ __all__ = [
     "ExceptionReason",
     "Order",
     "OrderStatus",
+    "PendingAction",
+    "PendingActionStatus",
+    "PendingActionType",
     "RefundReason",
     "RefundRequest",
     "RefundStatus",

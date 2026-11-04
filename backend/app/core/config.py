@@ -28,5 +28,9 @@ class Settings(BaseSettings):
     # DEVELOPMENT ONLY. Not authentication. Replaced by real auth in Milestone 5.
     demo_customer_email: str = "maya.patel@example.com"
 
+    agent_history_messages: int = 8
+    agent_recursion_limit: int = 12
+    pending_action_ttl_minutes: int = 10
+
 
 settings = Settings()
