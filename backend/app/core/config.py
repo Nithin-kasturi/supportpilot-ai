@@ -23,5 +23,10 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 3
     retrieval_min_similarity: float = 0.40
 
+    database_path: Path = PROJECT_ROOT / "data" / "sample_data" / "supportpilot.db"
+
+    # DEVELOPMENT ONLY. Not authentication. Replaced by real auth in Milestone 5.
+    demo_customer_email: str = "maya.patel@example.com"
+
 
 settings = Settings()
