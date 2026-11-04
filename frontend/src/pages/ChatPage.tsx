@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { MessageBubble } from '../components/MessageBubble'
-import { sendChatMessage } from '../services/chatApi'
+import { resolveConfirmation, sendAgentMessage } from '../services/chatApi'
 import type { ChatMessage } from '../types/chat'
 
 const WELCOME: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
   content:
-    "Hi, I'm SupportPilot AI. I can help with order tracking, damaged parcels, refunds and complaints. How can I help you today?",
+    "Hi, I'm SupportPilot AI. I can check your orders, explain refund eligibility and company policies, and help you request a refund or open a support ticket. How can I help you today?",
 }
 
 export function ChatPage() {
@@ -16,6 +16,7 @@ export function ChatPage() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [conversationId] = useState(() => crypto.randomUUID())
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,15 +34,51 @@ export function ChatPage() {
     setIsLoading(true)
 
     try {
-      const { reply, sources } = await sendChatMessage(text)
+      const reply = await sendAgentMessage(text, conversationId)
+      const next: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: reply.reply,
+        sources: reply.sources,
+        actions: reply.actions,
+        confirmation: reply.confirmation ?? undefined,
+        confirmationState: reply.confirmation ? 'pending' : undefined,
+      }
       setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: reply, sources },
+        // The server cancels older pending confirmations when a new one is prepared.
+        ...prev.map((m) =>
+          reply.confirmation && m.confirmation && m.confirmationState !== 'done'
+            ? { ...m, confirmationState: 'done' as const }
+            : m,
+        ),
+        next,
       ])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function handleDecision(messageId: string, decision: 'confirm' | 'cancel') {
+    const target = messages.find((m) => m.id === messageId)
+    if (!target?.confirmation) return
+
+    setError(null)
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, confirmationState: 'working' as const } : m)),
+    )
+    try {
+      const result = await resolveConfirmation(target.confirmation.id, decision)
+      setMessages((prev) => [
+        ...prev.map((m) => (m.id === messageId ? { ...m, confirmationState: 'done' as const } : m)),
+        { id: crypto.randomUUID(), role: 'assistant', content: result.reply },
+      ])
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, confirmationState: 'pending' as const } : m)),
+      )
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
     }
   }
 
@@ -57,7 +94,7 @@ export function ChatPage() {
 
       <main className="chat-messages">
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageBubble key={m.id} message={m} busy={isLoading} onDecision={handleDecision} />
         ))}
         {isLoading && (
           <div className="message-row assistant">

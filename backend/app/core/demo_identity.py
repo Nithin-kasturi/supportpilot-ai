@@ -29,8 +29,12 @@ def log_demo_identity_warning() -> None:
     )
 
 
+def resolve_demo_customer(db: Session) -> Customer | None:
+    return db.scalar(select(Customer).where(Customer.email == settings.demo_customer_email))
+
+
 def get_current_customer(db: Annotated[Session, Depends(get_db)]) -> Customer:
-    customer = db.scalar(select(Customer).where(Customer.email == settings.demo_customer_email))
+    customer = resolve_demo_customer(db)
     if customer is None:
         raise HTTPException(
             status_code=503,

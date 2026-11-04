@@ -6,6 +6,7 @@ type Tab = 'chat' | 'orders'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('chat')
+  const [ordersKey, setOrdersKey] = useState(0)
 
   return (
     <div className="app-shell">
@@ -22,7 +23,10 @@ export default function App() {
           role="tab"
           aria-selected={tab === 'orders'}
           className={tab === 'orders' ? 'tab active' : 'tab'}
-          onClick={() => setTab('orders')}
+          onClick={() => {
+            setOrdersKey((k) => k + 1)
+            setTab('orders')
+          }}
         >
           My Orders
         </button>
@@ -31,7 +35,7 @@ export default function App() {
         <ChatPage />
       </div>
       <div className="tab-content" hidden={tab !== 'orders'}>
-        <OrdersPanel />
+        <OrdersPanel key={ordersKey} />
       </div>
     </div>
   )

@@ -486,3 +486,36 @@ body {
   color: #1d4ed8;
   margin-bottom: 10px;
 }
+
+.agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.action-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.action-chip.failed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.confirm-card {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  background: #fffbeb;
+  font-size: 13px;
+}
+
+.confirm-card ul {
+  margin: 6px 0 10px;
+  padding-left: 18px;
+}

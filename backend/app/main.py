@@ -5,6 +5,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai.embeddings import get_model
+from app.api.routes.agent import router as agent_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.orders import router as orders_router
 from app.api.routes.refunds import router as refunds_router
@@ -21,7 +22,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="SupportPilot AI", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="SupportPilot AI", version="0.4.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+app.include_router(agent_router)
 app.include_router(orders_router)
 app.include_router(refunds_router)
 app.include_router(tickets_router)
