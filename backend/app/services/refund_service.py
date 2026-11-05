@@ -69,3 +69,12 @@ def create_refund_request(
     db.add(request)
     db.flush()
     return request
+
+def get_request(db: Session, customer_id: int, reference: str) -> RefundRequestOut | None:
+    """Ownership is part of the query."""
+    request = db.scalar(
+        select(RefundRequest)
+        .options(joinedload(RefundRequest.order))
+        .where(RefundRequest.customer_id == customer_id, RefundRequest.reference == reference.strip().upper())
+    )
+    return to_out(request) if request else None

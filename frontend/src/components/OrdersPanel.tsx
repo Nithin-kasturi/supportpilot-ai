@@ -167,9 +167,7 @@ export function OrdersPanel() {
 
   return (
     <div className="orders-panel">
-      <div className="demo-banner">
-        {me ? `Demo customer: ${me.name} (${me.email}). ${me.notice}` : 'Loading customer…'}
-      </div>
+            <div className="signed-in-banner">{me ? `Signed in as ${me.name}` : 'Loading profile…'}</div>
       {error && <div className="error-banner">{error}</div>}
       <div className="orders-body">
         <aside className="orders-list" aria-label="Orders">

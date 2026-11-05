@@ -9,8 +9,12 @@ import re
 from typing import Any
 
 from pydantic import ValidationError
-
+from app.agent.prompts import AGENT_SYSTEM_PROMPT, CLASSIFIER_PROMPT
+from app.security import ai_safety, audit, pii
 from app.agent.actions import prepare_refund_request, prepare_support_ticket
+
+from app.security import ai_safety, audit, pii
+from app.agent.prompts import AGENT_SYSTEM_PROMPT, CLASSIFIER_PROMPT
 from app.agent.parsing import (
     heuristic_intent,
     parse_category,
@@ -268,11 +272,20 @@ def run_order_tool_node(state: AgentState) -> dict[str, Any]:
 
 
 def retrieve_policy_node(state: AgentState) -> dict[str, Any]:
+    ctx = state["ctx"]
     try:
-        chunks = retrieve(state["message"])
+        retrieved = retrieve(pii.mask_pii(state["message"]))
         error = False
     except KnowledgeBaseEmptyError:
-        chunks, error = [], True
+        retrieved, error = [], True
+
+    # Retrieved text is untrusted: quarantine instruction-like chunks, and delimit the rest as data.
+    chunks, quarantined = ai_safety.screen_chunks(retrieved)
+    for chunk_id in quarantined:
+        audit.record("rag.chunk_quarantined", "rejected", principal=ctx.principal,
+                     resource_type="policy_chunk", resource_id=chunk_id,
+                     detail="instruction_like_content", channel=ctx.channel)
+
     actions = list(state.get("actions", []))
     actions.append(
         AgentAction(
@@ -331,7 +344,6 @@ def prepare_action_node(state: AgentState) -> dict[str, Any]:
         update["verified_order"] = state["order_number"]
     return update
 
-
 def respond_node(state: AgentState) -> dict[str, Any]:
     if state["intent"] == Intent.OFF_TOPIC:
         return {"reply": OFF_TOPIC_REPLY}
@@ -343,8 +355,10 @@ def respond_node(state: AgentState) -> dict[str, Any]:
         policy_error=state.get("policy_error", False),
     )
     reply = chat_completion(messages, temperature=settings.ollama_temperature).strip()
-    return {"reply": guard_claims(reply) if reply else GENERIC_FAILURE_REPLY}
-
+    if not reply:
+        return {"reply": GENERIC_FAILURE_REPLY}
+    safe = ai_safety.filter_reply(reply, [AGENT_SYSTEM_PROMPT, CLASSIFIER_PROMPT])
+    return {"reply": guard_claims(safe)}
 
 def route_after_classify(state: AgentState) -> str:
     if state.get("missing"):

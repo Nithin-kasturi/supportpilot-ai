@@ -63,3 +63,12 @@ def create_ticket(
     db.add(ticket)
     db.flush()
     return ticket
+
+def get_ticket(db: Session, customer_id: int, reference: str) -> TicketOut | None:
+    """Ownership is part of the query."""
+    ticket = db.scalar(
+        select(SupportTicket)
+        .options(joinedload(SupportTicket.order))
+        .where(SupportTicket.customer_id == customer_id, SupportTicket.reference == reference.strip().upper())
+    )
+    return to_out(ticket) if ticket else None

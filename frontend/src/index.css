@@ -519,3 +519,95 @@ body {
   margin: 6px 0 10px;
   padding-left: 18px;
 }
+
+
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card {
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.login-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.login-card input {
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.signed-in-banner {
+  padding: 8px 16px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 12px;
+}
+
+.tab-spacer {
+  flex: 1;
+}
+
+.tab-user {
+  align-self: center;
+  padding-right: 8px;
+  color: #dbeafe;
+  font-size: 12px;
+}
+
+.ops-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.ops-panel h2 {
+  margin: 14px 0 8px;
+  font-size: 16px;
+}
+
+.records-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.records-list li {
+  margin: 10px 0;
+}
+
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ops-table th,
+.ops-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+}

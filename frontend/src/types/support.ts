@@ -9,10 +9,10 @@ export type TicketCategory =
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
 
 export interface Me {
+  id: number
   name: string
   email: string
-  identity_mode: string
-  notice: string
+  role: string
 }
 
 export interface OrderSummary {
