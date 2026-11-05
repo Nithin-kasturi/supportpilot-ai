@@ -1,3 +1,4 @@
+from app.models.auth import AuditLog, RevokedToken, User, UserRole
 from app.models.entities import (
     Customer,
     DelayReason,
@@ -15,6 +16,7 @@ from app.models.entities import (
 from app.models.pending_action import PendingAction, PendingActionStatus, PendingActionType
 
 __all__ = [
+    "AuditLog",
     "Customer",
     "DelayReason",
     "ExceptionReason",
@@ -26,8 +28,11 @@ __all__ = [
     "RefundReason",
     "RefundRequest",
     "RefundStatus",
+    "RevokedToken",
     "ServiceLevel",
     "SupportTicket",
     "TicketCategory",
     "TicketStatus",
+    "User",
+    "UserRole",
 ]

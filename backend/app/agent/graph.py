@@ -1,6 +1,7 @@
 from langgraph.graph import END, START, StateGraph
-
+from app.security import pii
 from app.agent.memory import MEMORY
+from app.security import pii
 from app.agent.nodes import (
     classify_node,
     clarify_node,
@@ -71,7 +72,10 @@ def run_agent(ctx: ToolContext, conversation_id: str, message: str) -> AgentChat
 
     reply = final["reply"]
     memory.history.extend(
-        [{"role": "user", "content": message}, {"role": "assistant", "content": reply}]
+        [
+            {"role": "user", "content": pii.mask_pii(message)},
+            {"role": "assistant", "content": pii.mask_pii(reply)},
+        ]
     )
     del memory.history[: -settings.agent_history_messages]
     if final.get("verified_order"):

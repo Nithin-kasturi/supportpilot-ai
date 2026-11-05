@@ -1,6 +1,6 @@
 import type { AgentAction, AgentReply, ConfirmationPrompt, ConfirmReply, Source } from '../types/chat'
+import { apiFetch, errorMessage } from './http'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 // A turn can involve two model calls, so allow longer than a single Ollama timeout.
 const REQUEST_TIMEOUT_MS = 240_000
 
@@ -35,46 +35,16 @@ function isConfirmation(value: unknown): value is ConfirmationPrompt {
 }
 
 async function post(path: string, body: unknown): Promise<unknown> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-
+  const response = await apiFetch(
+    path,
+    { method: 'POST', body: JSON.stringify(body) },
+    { timeoutMs: REQUEST_TIMEOUT_MS },
+  )
+  if (!response.ok) throw new Error(await errorMessage(response))
   try {
-    let response: Response
-    try {
-      response = await fetch(`${API_BASE_URL}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error('The request timed out. Please try again.')
-      }
-      throw new Error('Cannot reach the SupportPilot server. Make sure the backend is running.')
-    }
-
-    if (!response.ok) {
-      if (response.status === 422) {
-        throw new Error('Your message must be between 1 and 2000 characters.')
-      }
-      let detail = `Request failed with status ${response.status}.`
-      try {
-        const data = await response.json()
-        if (typeof data.detail === 'string') detail = data.detail
-      } catch {
-        // response body was not JSON; keep the default message
-      }
-      throw new Error(detail)
-    }
-
-    try {
-      return await response.json()
-    } catch {
-      throw new Error('Received an unexpected response from the server.')
-    }
-  } finally {
-    clearTimeout(timer)
+    return await response.json()
+  } catch {
+    throw new Error('Received an unexpected response from the server.')
   }
 }
 

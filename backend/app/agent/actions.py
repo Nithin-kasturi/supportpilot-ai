@@ -1,7 +1,7 @@
 """Sensitive operations: prepare (preview + pending action) and resolve (customer decision).
 
-Nothing is created here without a stored, owned, unexpired, single-use pending action and an
-explicit customer decision. The stored parameters are the only thing a confirmation can execute.
+Nothing is created here without a stored, owned, unexpired, single-use pending action and an explicit
+customer decision. Execution re-runs the tools, which re-check permission, ownership and eligibility.
 """
 
 import json
@@ -25,6 +25,7 @@ from app.schemas.tools import (
     ToolError,
     ToolResult,
 )
+from app.security import audit
 from app.services import pending_action_service as pending
 from app.services.refund_eligibility_service import usd
 from app.tools import support_tools
@@ -58,20 +59,12 @@ def _invalid(message: str = "The details provided were not valid.") -> ToolResul
 
 
 def prepare_refund_request(
-    ctx: ToolContext,
-    *,
-    order_number: str,
-    reason: RefundReason,
-    photos: int,
-    note: str | None = None,
+    ctx: ToolContext, *, order_number: str, reason: RefundReason, photos: int, note: str | None = None
 ) -> tuple[ConfirmationPrompt | None, ToolResult]:
     try:
         params = CreateRefundRequestInput(
-            order_number=order_number,
-            reason=reason,
-            evidence_photo_count=photos,
-            customer_note=note,
-            confirmed=False,
+            order_number=order_number, reason=reason, evidence_photo_count=photos,
+            customer_note=note, confirmed=False,
         )
     except ValidationError:
         return None, _invalid()
@@ -82,11 +75,11 @@ def prepare_refund_request(
         return None, result
 
     action = pending.create_pending(
-        ctx.db,
-        ctx.customer.id,
-        PendingActionType.REFUND_REQUEST,
+        ctx.db, ctx.customer.id, PendingActionType.REFUND_REQUEST,
         params.model_dump(mode="json", exclude={"confirmed"}),
     )
+    audit.record("refund.prepare", "success", principal=ctx.principal, resource_type="order",
+                 resource_id=params.order_number, detail="confirmation_requested", channel=ctx.channel)
     eligibility = data.eligibility
     status_text = REFUND_STATUS_TEXT[data.status_if_created] if data.status_if_created else "Pending"
     prompt = ConfirmationPrompt(
@@ -106,11 +99,7 @@ def prepare_refund_request(
 
 
 def prepare_support_ticket(
-    ctx: ToolContext,
-    *,
-    order_number: str | None,
-    category: TicketCategory,
-    description: str,
+    ctx: ToolContext, *, order_number: str | None, category: TicketCategory, description: str
 ) -> tuple[ConfirmationPrompt | None, ToolResult]:
     subject = (
         f"{CATEGORY_TEXT[category]} - order {order_number}"
@@ -119,11 +108,8 @@ def prepare_support_ticket(
     )
     try:
         params = CreateSupportTicketInput(
-            order_number=order_number,
-            category=category,
-            subject=subject,
-            description=description,
-            confirmed=False,
+            order_number=order_number, category=category, subject=subject,
+            description=description, confirmed=False,
         )
     except ValidationError:
         return None, _invalid("Please describe the problem in at least a sentence (10 to 2000 characters).")
@@ -134,11 +120,11 @@ def prepare_support_ticket(
         return None, result
 
     action = pending.create_pending(
-        ctx.db,
-        ctx.customer.id,
-        PendingActionType.SUPPORT_TICKET,
+        ctx.db, ctx.customer.id, PendingActionType.SUPPORT_TICKET,
         params.model_dump(mode="json", exclude={"confirmed"}),
     )
+    audit.record("ticket.prepare", "success", principal=ctx.principal, resource_type="order",
+                 resource_id=order_number, detail="confirmation_requested", channel=ctx.channel)
     preview = data.preview
     prompt = ConfirmationPrompt(
         id=action.id,
@@ -155,6 +141,11 @@ def prepare_support_ticket(
     return prompt, result
 
 
+def _audit_resolution(ctx: ToolContext, action_id: str, outcome: str, detail: str) -> None:
+    audit.record("confirmation.resolve", outcome, principal=ctx.principal,
+                 resource_type="pending_action", resource_id=action_id, detail=detail, channel=ctx.channel)
+
+
 def _failed(ctx: ToolContext, action_id: str, reply: str) -> ConfirmResponse:
     pending.set_status(ctx.db, action_id, PendingActionStatus.FAILED)
     return ConfirmResponse(outcome="failed", reply=reply)
@@ -169,9 +160,7 @@ def _execute(ctx: ToolContext, action_id: str, action_type: PendingActionType, p
             if result.ok and result.data and result.data.outcome == "created" and result.data.refund_request:
                 record = result.data.refund_request
                 return ConfirmResponse(
-                    outcome="created",
-                    reference=record.reference,
-                    status=record.status.value,
+                    outcome="created", reference=record.reference, status=record.status.value,
                     reply=(
                         f"Done. Refund request {record.reference} was submitted for "
                         f"{usd(record.amount_cents)}. Status: {REFUND_STATUS_TEXT[record.status]}. "
@@ -182,17 +171,11 @@ def _execute(ctx: ToolContext, action_id: str, action_type: PendingActionType, p
             ticket_result: ToolResult[CreateTicketOutput] = support_tools.create_support_ticket(
                 ctx, CreateSupportTicketInput(**params, confirmed=True)
             )
-            if (
-                ticket_result.ok
-                and ticket_result.data
-                and ticket_result.data.outcome == "created"
-                and ticket_result.data.ticket
-            ):
+            if (ticket_result.ok and ticket_result.data and ticket_result.data.outcome == "created"
+                    and ticket_result.data.ticket):
                 ticket = ticket_result.data.ticket
                 return ConfirmResponse(
-                    outcome="created",
-                    reference=ticket.reference,
-                    status=ticket.status.value,
+                    outcome="created", reference=ticket.reference, status=ticket.status.value,
                     reply=f"Done. Support ticket {ticket.reference} was created (status: {ticket.status.value}). The support team will follow up.",
                 )
             result = ticket_result  # type: ignore[assignment]
@@ -206,16 +189,19 @@ def _execute(ctx: ToolContext, action_id: str, action_type: PendingActionType, p
 def resolve_pending(ctx: ToolContext, action_id: str, decision: str) -> ConfirmResponse:
     action = pending.get_owned(ctx.db, ctx.customer.id, action_id)
     if action is None:
+        _audit_resolution(ctx, action_id, "rejected", "not_found_or_not_owner")
         return ConfirmResponse(
             outcome="not_found", reply="I couldn't find that confirmation request, so nothing was created."
         )
     if action.status != PendingActionStatus.PENDING:
+        _audit_resolution(ctx, action_id, "rejected", f"reuse_{action.status.value}")
         return ConfirmResponse(
             outcome="already_resolved",
             reply=f"That request was already {action.status.value}, so nothing further was done.",
         )
     if utcnow() > action.expires_at:
         pending.claim(ctx.db, action.id, PendingActionStatus.EXPIRED)
+        _audit_resolution(ctx, action_id, "rejected", "expired")
         return ConfirmResponse(
             outcome="expired",
             reply="That confirmation has expired, so nothing was created. Ask me again if you still want to go ahead.",
@@ -223,10 +209,13 @@ def resolve_pending(ctx: ToolContext, action_id: str, decision: str) -> ConfirmR
 
     if decision == "cancel":
         if pending.claim(ctx.db, action.id, PendingActionStatus.CANCELLED):
+            _audit_resolution(ctx, action_id, "success", "cancelled")
             return ConfirmResponse(outcome="cancelled", reply="Okay, I won't go ahead. Nothing was created.")
         return ConfirmResponse(outcome="already_resolved", reply="That request was already resolved.")
 
     # Single use: only the caller that wins this atomic claim may execute.
     if not pending.claim(ctx.db, action.id, PendingActionStatus.CONFIRMED):
+        _audit_resolution(ctx, action_id, "rejected", "reuse_race")
         return ConfirmResponse(outcome="already_resolved", reply="That request was already resolved.")
+    _audit_resolution(ctx, action_id, "success", "confirmed")
     return _execute(ctx, action.id, action.action_type, json.loads(action.params_json))

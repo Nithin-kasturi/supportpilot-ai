@@ -12,43 +12,14 @@ import type {
   ToolResult,
   Tracking,
 } from '../types/support'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-
-async function send(path: string, init?: RequestInit): Promise<Response> {
-  try {
-    return await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
-    })
-  } catch {
-    throw new Error('Cannot reach the SupportPilot server. Make sure the backend is running.')
-  }
-}
-
-async function errorMessage(response: Response): Promise<string> {
-  if (response.status === 422) {
-    return 'Some of the details entered are not valid. Please check them and try again.'
-  }
-  try {
-    const body = await response.json()
-    if (typeof body.detail === 'string') return body.detail
-  } catch {
-    // body was not JSON
-  }
-  return `Request failed with status ${response.status}.`
-}
-
-async function getJson<T>(path: string): Promise<T> {
-  const response = await send(path)
-  if (!response.ok) throw new Error(await errorMessage(response))
-  return (await response.json()) as T
-}
+import { apiFetch, errorMessage, getJson } from './http'
 
 /** Tool endpoints answer 404/409 with a structured ToolResult body, so those are returned, not thrown. */
 async function postTool<T>(path: string, body: unknown): Promise<ToolResult<T>> {
-  const response = await send(path, { method: 'POST', body: JSON.stringify(body) })
-  if (response.status === 422 || response.status >= 500) throw new Error(await errorMessage(response))
+  const response = await apiFetch(path, { method: 'POST', body: JSON.stringify(body) })
+  if (response.status === 422 || response.status === 429 || response.status === 403 || response.status >= 500) {
+    throw new Error(await errorMessage(response))
+  }
   let data: unknown
   try {
     data = await response.json()
@@ -75,7 +46,7 @@ export async function checkEligibility(
   reason: RefundReason,
   photos: number,
 ): Promise<Eligibility> {
-  const response = await send(`/api/orders/${encodeURIComponent(orderNumber)}/refund-eligibility`, {
+  const response = await apiFetch(`/api/orders/${encodeURIComponent(orderNumber)}/refund-eligibility`, {
     method: 'POST',
     body: JSON.stringify({ reason, evidence_photo_count: photos }),
   })
